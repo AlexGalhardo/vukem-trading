@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **site:** Doc pages are dated by the author date, so a rebase merge no longer turns the `Last updated` check red; the `.githooks/pre-push` hook refreshes `site/content/last-updated.json` before a push.
 - MCP tool errors return a generic message for internal failures and log the original (security audit TR-AUDIT-003).
 - `POST /mcp` is throttled per client address (60 requests per minute) and `MCP_TOKEN` shorter than 32 characters is a boot error (security audit TR-AUDIT-002).
 - Ticket orders on the US broker account are rejected when the latest quote is older than `Policy.MaxAgeSeconds` (security audit TR-AUDIT-001).
