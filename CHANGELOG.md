@@ -7,60 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **site:** Doc pages are dated by the author date, so a rebase merge no longer turns the `Last updated` check red; the `.githooks/pre-push` hook refreshes `site/content/last-updated.json` before a push.
-- MCP tool errors return a generic message for internal failures and log the original (security audit TR-AUDIT-003).
-- `POST /mcp` is throttled per client address (60 requests per minute) and `MCP_TOKEN` shorter than 32 characters is a boot error (security audit TR-AUDIT-002).
-- Ticket orders on the US broker account are rejected when the latest quote is older than `Policy.MaxAgeSeconds` (security audit TR-AUDIT-001).
-- `Engine.Run` treats an error raised while its context is being cancelled as a clean stop; this removes the flaky `TestPostgresWorkerFailover`.
-- `State.Reserve` rejects an entry without a valid stop (`stop required`), even when a strategy bypassed `Strategy.Validate`.
+## [0.3.0] - 2026-11-07
 
 ### Added
 
-- Chart indicators (SMA 20, EMA 50, Bollinger 20, session VWAP, volume, RSI 14) on history charts, with `bun run test:unit` unit tests.
-- Playwright coverage for anonymous access, private API 401s, the session cookie and the indicator toggles (`e2e/access.spec.ts`).
-- Vendored Cloudflare `security-audit` skill and `Security audit` workflow.
-- `GET /api/stream`: Server-Sent Events channel that tells the terminal when data changed (ADR-0022).
-- `adapters.BinanceTestnet`: signed, idempotent testnet-only order adapter, not wired into the engine.
-- `trading.AvellanedaStoikov`: market-making quote math, not connected to any venue.
-- `trading.EvaluateLiveGate`: environment-only live switch with first-period ceilings; the web service never enables live (ADR-0021, proposed).
-- `POST /api/strategies/{id}/decision`: keep-or-disable verdict with a reason in the audit trail.
-- Benchmarks, restore timing and `docs/runbooks/capacity.md`.
-
-- Fuzz tests for the CSV importer and the strategy signals, run briefly in CI.
-- Operations: `GET /api/metrics`, an `Uptime` workflow, runbooks (incident, restore, key rotation), a restore rehearsal script with its recorded run, a dependency policy and `bun audit` in CI.
-- A read-only MCP endpoint behind `MCP_TOKEN` with a fixed tool list, and strategy drafts that need explicit owner approval; ADR-0020.
-- Terminal: an always-visible safety strip, a command palette with Alt+digit page shortcuts, a server-side workspace (watchlist, price alerts, order templates), one-key paper order tickets sized by cash share and risk budget, and a canvas tape and ladder.
-- Engine: price alerts evaluated on every tick and sent once through Telegram.
-- TypeScript wire types generated from the Go structs, with a test that fails on drift; ADR-0019.
-- Data providers: a `Provider` interface and registry with fail-fast credentials, a Binance adapter for crypto candles and the Alpaca IEX adapter behind the same interface.
-- Crypto (BTCUSDT, ETHUSDT) and spot forex (EURUSD, USDBRL) for backtests under a `research` account, with 24/7 and Monday-to-Friday sessions and tick-accurate price rounding.
-- A market coverage matrix in the snapshot and Settings; ADR-0018.
-- Strategies: opening-range breakout, VWAP reversion, ADX-filtered trend and a DCA grid with capped inventory, declared in the parameter schema.
-- Backtests: resting limit orders and partial fills over several bars, train/test/validation partitions (validation once per strategy version), walk-forward windows, Sharpe, Sortino, Calmar, SQN, block bootstrap, cost stress and deflated Sharpe, shown in the report.
-- Strategy parameters declared as data and served by `GET /api/strategy-kinds`; the strategy form renders from it.
-- ADR-0015 (Bun, Biome), ADR-0016 (fill rules, validation protocol), ADR-0017 (documentation site).
-- Risk protections: stop-loss streak lock, per-symbol cooldown and equity-drawdown halt, configurable in the risk form.
-- Close reason on every exit order; audit entries `risk.halt` and `risk.resume`; one-shot alerts for halts and stuck unknown orders.
-- The daily-loss halt lifts at the next market day.
+- **security:** Vendor the Cloudflare security-audit skill and workflow ([d2a70dd](https://github.com/AlexGalhardo/vukem-trading/commit/d2a70dda5409545ae82a072db29badb3adeb718d))
+- **ui:** Add chart indicators (SMA, EMA, Bollinger, VWAP, volume, RSI) with unit tests ([051d805](https://github.com/AlexGalhardo/vukem-trading/commit/051d80590e520420d36e99a975d94d8d1adf0192))
+- **auth:** Fail boot on a non-canonical production APP_URL and test the Google redirect URI ([148e142](https://github.com/AlexGalhardo/vukem-trading/commit/148e1427afd9bd1306939e48ee14bf375406a3f4))
+- **web:** Mark private responses no-store ([8221476](https://github.com/AlexGalhardo/vukem-trading/commit/822147684130dafe5c3b1e3aa91800fedfc29660))
 
 ### Changed
 
-- Require vukem v0.39.0.
-- **docs:** Agent rules now cover the shared framework feedback file (`TR-` ids), the Astro docs site and `last-updated`, the security-audit skill in guidance mode, and Railway service, volume and domain rules (`.agents/rules/railway.md`).
-- Vukem 0.38.0.
-- Production boot fails unless `APP_URL` is an https origin without a path (`accounts.ValidateAppURL`); env templates and the deploy checklist target `https://app.trading.vukem.dev`.
-- Dynamic responses carry `Cache-Control: private, no-store`; hashed assets stay immutable.
-- Container images are pinned by digest in the Dockerfiles, Compose and CI.
-- Backtest partitions are now train (first 60%), test (next 20%) and validation (last 20%); the old test partition was the last 30%.
-- Orders that the open does not reach rest instead of being canceled; a buy never prints above the bar's high.
-- Remaining `^` ranges in `package.json` pinned to exact versions.
-- Risk tests: default deny, mandatory stop, risk-per-trade sizing and the daily-loss kill switch.
+- **site:** Migrate the documentation site from Next.js to Astro ([6e98c29](https://github.com/AlexGalhardo/vukem-trading/commit/6e98c292f2d21b633509232568e4fed5b233fe40))
 
-### Security
+### Fixed
 
-- Override `re2js` to 2.8.7 (high advisory in the markdownlint toolchain).
+- **site:** Answer / and /docs/ with real 301 redirects to the introduction ([b92c649](https://github.com/AlexGalhardo/vukem-trading/commit/b92c649ce3dabfe56d59c8f3d2f4c0b74d8ac0d6))
+- **site:** Drop the inherited /pt-br redirect, which allowed an off-site redirect ([995288a](https://github.com/AlexGalhardo/vukem-trading/commit/995288a9d5aff623d87fdc8e2c663c3f8b6b83ef))
+- **security:** Reject stale quotes on broker account tickets ([ba52870](https://github.com/AlexGalhardo/vukem-trading/commit/ba52870d694e66d36720d4a61001ad30aa9689cc))
+- **security:** Throttle MCP and require a strong MCP_TOKEN ([49a922c](https://github.com/AlexGalhardo/vukem-trading/commit/49a922cf6d078464433d6cecba1b9f8fb6fe81d1))
+- **security:** Stop MCP from returning internal error text ([a942580](https://github.com/AlexGalhardo/vukem-trading/commit/a942580ab6c566ef0fe296713c1e1e89dc3da470))
+- **security:** Use errors.AsType in the MCP error path ([480fb9f](https://github.com/AlexGalhardo/vukem-trading/commit/480fb9f340558f464d920e0527ff75b50b9d2e5a))
+- **site:** Date doc pages by author date so rebase merges keep them valid ([fb9fbaa](https://github.com/AlexGalhardo/vukem-trading/commit/fb9fbaa7db3e7a3f0d06b4be65411356520725ea))
+
+## [0.2.0] - 2026-11-04
+
+### Added
+
+- **risk:** Add protections, exit reasons, halt audit and one-shot alerts ([6fb205f](https://github.com/AlexGalhardo/vukem-trading/commit/6fb205f338d5c1af3016d41c7bafbbc942cfa4f0))
+- **backtest:** Add resting orders, partitions, walk-forward, statistics and robustness checks ([5f748e5](https://github.com/AlexGalhardo/vukem-trading/commit/5f748e5b0111b9f9594075efcacdef1a4945dd59))
+- **strategy:** Add opening range, VWAP, ADX trend and capped DCA grid strategies ([88a3a6a](https://github.com/AlexGalhardo/vukem-trading/commit/88a3a6a3134f0cae15de96f55e8d881a054adff6))
+- **data:** Add provider interface, crypto and FX backtests, coverage matrix and research account ([3397ba9](https://github.com/AlexGalhardo/vukem-trading/commit/3397ba971af35898b474fa6fa8293b263706c95a))
+- **web:** Add safety strip, palette, saved workspace, tickets and alerts ([ed96f9b](https://github.com/AlexGalhardo/vukem-trading/commit/ed96f9b505fa991f35ebe236a349ec312bb169c8))
+- **ops:** Add metrics, uptime, runbooks, read-only MCP and strategy drafts ([a4eaabc](https://github.com/AlexGalhardo/vukem-trading/commit/a4eaabc512948a01b73d8566ad8f74b3ca1f304b))
+- Add change stream, testnet adapter, live gate, quotes and capacity runbook ([087904b](https://github.com/AlexGalhardo/vukem-trading/commit/087904bd1d116799a96158198dc327ead8599ebb))
+
+### Fixed
+
+- **deps:** Override re2js to 2.8.7 and record Scorecard status in the roadmap ([680559e](https://github.com/AlexGalhardo/vukem-trading/commit/680559e2e57e52091281f8a79991494ea37174aa))
+- **engine:** Stop cleanly on context cancel and enforce a mandatory stop ([9e69fdc](https://github.com/AlexGalhardo/vukem-trading/commit/9e69fdcb7eedda112a03a097ccd83382eefe790c))
 
 ## [0.1.0] - 2026-11-04
 
@@ -83,5 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release workflow publishes the matching CHANGELOG section, a GHCR image and build provenance.
 - `Terminal` tables use stable row keys.
 
-[Unreleased]: https://github.com/AlexGalhardo/vukem-trading/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/AlexGalhardo/vukem-trading/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/AlexGalhardo/vukem-trading/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/AlexGalhardo/vukem-trading/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AlexGalhardo/vukem-trading/releases/tag/v0.1.0
