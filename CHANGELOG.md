@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remaining `^` ranges in `package.json` pinned to exact versions.
 - Risk tests: default deny, mandatory stop, risk-per-trade sizing and the daily-loss kill switch.
 
+### Removed
+
+- **repo:** Unused posts scaffold from `vukem new` (controller, model, request, factory, seeder); the `posts` table stays until a later contract migration
+
 ### Security
 
 - Override `re2js` to 2.8.7 (high advisory in the markdownlint toolchain).
