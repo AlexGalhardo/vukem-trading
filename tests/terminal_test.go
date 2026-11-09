@@ -593,3 +593,122 @@ func TestEmergencyControls(t *testing.T) {
 
 	c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "nope"}).AssertUnprocessable()
 }
+
+func seedAccount(t *testing.T, store trading.Store, id string, fn func(*trading.State)) {
+	t.Helper()
+	err := store.Mutate(t.Context(), id, "test", "seed", func(a *trading.State) error {
+		fn(a)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEmergencyControlsWithOrders(t *testing.T) {
+	openOrders := func(a *trading.State) {
+		a.Orders = []trading.Order{
+			{ID: "o1", Key: "k1", Symbol: "AAPL", Side: "buy", Status: "approved", Reserved: trading.D("100")},
+			{ID: "o2", Key: "k2", Symbol: "MSFT", Side: "buy", Status: "acknowledged", Reserved: trading.D("50")},
+		}
+	}
+	position := func(a *trading.State) {
+		a.Positions = map[string]trading.Position{
+			"AAPL": {Symbol: "AAPL", Qty: trading.D("1"), Average: trading.D("190"), Mark: trading.D("190")},
+		}
+		a.ReconciledAt = time.Now().UTC()
+	}
+	setup := func(t *testing.T, account string, seed func(*trading.State)) (*vukemtest.Client, trading.Store) {
+		t.Helper()
+		a := terminalApp(t, "owner", "owner@example.com", true)
+		c := signIn(t, a).AcceptJSON()
+		c.GetJSON("/api/snapshot").AssertOK()
+		db, err := a.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		store := trading.Store{DB: db}
+		seedAccount(t, store, account, seed)
+		return c, store
+	}
+	load := func(t *testing.T, store trading.Store, account string) trading.State {
+		t.Helper()
+		var state trading.State
+		if err := store.Get(t.Context(), "trading_accounts", account, &state); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+
+	t.Run("cancel cancels approved orders and marks live ones cancel_pending", func(t *testing.T) {
+		c, store := setup(t, "us", openOrders)
+		c.PostJSON("/api/accounts/us/control", map[string]any{"action": "cancel"}).AssertOK()
+		state := load(t, store, "us")
+		if state.Orders[0].Status != "canceled" || !state.Orders[0].Reserved.IsZero() {
+			t.Fatalf("approved order not canceled: %+v", state.Orders[0])
+		}
+		if state.Orders[1].Status != "cancel_pending" {
+			t.Fatalf("live order must wait for the broker: %+v", state.Orders[1])
+		}
+		if !state.Halted || state.Reason != "Cancellation requested" {
+			t.Fatalf("cancel must halt the account: %+v", state)
+		}
+	})
+
+	t.Run("cancel on the replay account cancels every open order", func(t *testing.T) {
+		c, store := setup(t, "b3", openOrders)
+		c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "cancel"}).AssertOK()
+		for _, o := range load(t, store, "b3").Orders {
+			if o.Status != "canceled" {
+				t.Fatalf("replay order not canceled: %+v", o)
+			}
+		}
+	})
+
+	t.Run("flatten is refused while a symbol has a pending order", func(t *testing.T) {
+		c, store := setup(t, "us", func(a *trading.State) {
+			position(a)
+			a.Orders = []trading.Order{
+				{ID: "o1", Key: "k1", Symbol: "AAPL", Side: "buy", Status: "acknowledged"},
+			}
+		})
+		before := load(t, store, "us")
+		c.PostJSON("/api/accounts/us/control", map[string]any{"action": "flatten", "confirm": "ZERAR"}).
+			AssertUnprocessable()
+		after := load(t, store, "us")
+		if after.Generation != before.Generation || after.Reason != before.Reason ||
+			len(after.Orders) != 1 {
+			t.Fatalf("refused flatten changed the state: before=%+v after=%+v", before, after)
+		}
+	})
+}
+
+func TestFlattenCharacterization(t *testing.T) {
+	a := terminalApp(t, "owner", "owner@example.com", true)
+	c := signIn(t, a).AcceptJSON()
+	c.GetJSON("/api/snapshot").AssertOK()
+	db, err := a.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := trading.Store{DB: db}
+	seedAccount(t, store, "us", func(a *trading.State) {
+		a.Positions = map[string]trading.Position{
+			"AAPL": {Symbol: "AAPL", Qty: trading.D("1"), Average: trading.D("190"), Mark: trading.D("190")},
+		}
+		a.ReconciledAt = time.Now().UTC()
+	})
+	// Characterization: a confirmed flatten on a reconciled account halts it and reserves one sell order per position.
+	c.PostJSON("/api/accounts/us/control", map[string]any{"action": "flatten", "confirm": "ZERAR"}).AssertOK()
+	var state trading.State
+	if err := store.Get(t.Context(), "trading_accounts", "us", &state); err != nil {
+		t.Fatal(err)
+	}
+	if !state.Halted || state.Reason != "Flatten requested; monitor orders and positions" || len(state.Orders) != 1 {
+		t.Fatalf("unexpected flatten state: %+v", state)
+	}
+	if o := state.Orders[0]; o.Side != "sell" || o.Symbol != "AAPL" || o.Status != "approved" ||
+		!strings.HasSuffix(o.Key, "/flatten") {
+		t.Fatalf("unexpected flatten order: %+v", o)
+	}
+}
