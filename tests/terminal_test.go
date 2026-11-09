@@ -548,3 +548,48 @@ func TestSecurity_TR001_TicketRejectsAStaleQuoteOnTheBrokerAccount(t *testing.T)
 		t.Fatalf("a stale quote must not reserve an order, got %d", len(state.Orders))
 	}
 }
+
+func TestEmergencyControls(t *testing.T) {
+	a := terminalApp(t, "owner", "owner@example.com", true)
+	c := signIn(t, a).AcceptJSON()
+	c.GetJSON("/api/snapshot").AssertOK()
+	db, err := a.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := trading.Store{DB: db}
+	load := func() trading.State {
+		t.Helper()
+		var state trading.State
+		if err := store.Get(t.Context(), "trading_accounts", "b3", &state); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+
+	// New accounts start halted, so a persisted halt shows up as a changed reason or generation.
+	initial := load()
+	if !initial.Halted || initial.Generation != 0 {
+		t.Fatalf("unexpected initial state: %+v", initial)
+	}
+
+	c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "flatten"}).AssertUnprocessable()
+	if state := load(); state.Reason != initial.Reason || state.Generation != 0 {
+		t.Fatalf("flatten without confirmation must not persist a halt: %+v", state)
+	}
+
+	// A refused flatten rolls the whole mutation back, including its own halt.
+	c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "flatten", "confirm": "ZERAR"}).
+		AssertUnprocessable()
+	if state := load(); state.Reason != initial.Reason || state.Generation != 0 {
+		t.Fatalf("refused flatten must not persist a halt: %+v", state)
+	}
+
+	c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "cancel"}).AssertOK()
+	state := load()
+	if !state.Halted || state.Reason != "Cancellation requested" || state.Generation != 1 {
+		t.Fatalf("cancel not persisted: %+v", state)
+	}
+
+	c.PostJSON("/api/accounts/b3/control", map[string]any{"action": "nope"}).AssertUnprocessable()
+}
