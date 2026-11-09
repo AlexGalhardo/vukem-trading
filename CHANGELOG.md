@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **repo:** Unused posts scaffold from `vukem new` (controller, model, request, factory, seeder); the `posts` table stays until a later contract migration
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
