@@ -26,7 +26,7 @@
     "github-slugger": "2.0.0",
     "gray-matter": "4.0.3",
     "lucide-react": "1.61.0",
-    "oxc-transform-react": "0.145.0",
+    "oxc-transform-react": "0.157.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "rehype-slug": "6.0.0",
