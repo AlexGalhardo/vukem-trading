@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/AlexGalhardo/vukem-trading/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexGalhardo/vukem-trading/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
-[![Go 1.27.3](https://img.shields.io/badge/go-1.27.3-00ADD8?logo=go&logoColor=white)](go.mod)
+[![Go 1.27.4](https://img.shields.io/badge/go-1.27.4-00ADD8?logo=go&logoColor=white)](go.mod)
 <a href="https://github.com/AlexGalhardo/vukem-trading/releases"><img src="https://img.shields.io/github/v/release/AlexGalhardo/vukem-trading?include_prereleases&label=version" alt="Version"></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/AlexGalhardo/vukem-trading"><img src="https://api.scorecard.dev/projects/github.com/AlexGalhardo/vukem-trading/badge" alt="OpenSSF Scorecard"></a>
 
