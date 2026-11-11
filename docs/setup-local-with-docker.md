@@ -5,7 +5,7 @@ Run the whole stack (web, engine, PostgreSQL and a mail catcher) on your machine
 ## Requirements
 
 - Docker with Compose v2.
-- The Vukem CLI, to generate the application key: `go install github.com/AlexGalhardo/vukem/cmd/vukem@v0.39.0` (Go 1.27.3 or newer).
+- The Vukem CLI, to generate the application key: `go install github.com/AlexGalhardo/vukem/cmd/vukem@v0.41.0` (Go 1.27.4 or newer).
 - Bun 1.4.4, only if you want to run the frontend tooling outside Docker.
 - A Google Web OAuth client, to sign in (see [Google sign-in](#google-sign-in)).
 
