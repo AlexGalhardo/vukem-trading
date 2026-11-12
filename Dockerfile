@@ -29,7 +29,7 @@ RUN tags="$(sed 's/#.*//' .buildtags 2>/dev/null | tr -s ', \t\r\n' ',' | sed 's
 	&& go build -trimpath -ldflags="-s -w -X github.com/AlexGalhardo/vukem-trading/internal/trading.BuildVersion=$RAILWAY_GIT_COMMIT_SHA" -tags "$tags" -o /out/app ./cmd/app \
 	&& go build -trimpath -ldflags="-s -w -X github.com/AlexGalhardo/vukem-trading/internal/trading.BuildVersion=$RAILWAY_GIT_COMMIT_SHA" -tags "$tags" -o /out/engine ./cmd/engine
 
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 RUN apk add --no-cache ca-certificates tzdata \
 	&& adduser -D -H -u 10001 app \
 	&& mkdir -p /app/storage \
