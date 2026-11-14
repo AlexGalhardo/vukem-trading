@@ -48,4 +48,7 @@ ENV APP_ENV=production HOST=0.0.0.0 PORT=3000 LOG_FORMAT=json MAIL_MAILER=log
 # A platform start command (Railway, Fly) replaces this entrypoint, so it has
 # to name the binary: "/app/app queue:work", never "queue:work".
 EXPOSE 3000
+# Liveness of the web process; /up does not touch the database. The engine
+# service overrides this check in compose.yaml and on the platform.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 	CMD ["/bin/sh", "-c", "wget -qO- http://127.0.0.1:${PORT}/up"]
 ENTRYPOINT ["/app/app"]
