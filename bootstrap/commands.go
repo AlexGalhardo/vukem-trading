@@ -7,5 +7,5 @@ import (
 )
 
 func Commands() []vukem.Command {
-	return []vukem.Command{commands.Worker{}, &commands.OwnerReset{}, commands.RecoDaily{}}
+	return []vukem.Command{commands.Worker{}, &commands.OwnerReset{}, commands.RecoDaily{}, commands.RecoPaper{}}
 }
