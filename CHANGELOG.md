@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **release:** The image is smoke tested (`/up`) before the push, published to GHCR and Docker Hub as `X.Y.Z`, `X.Y` and `latest` (stable tags only), and signed with cosign with build provenance attestations; the release workflow is split into test, image and release jobs, with actions pinned to the same SHAs as vukem
+- **docker:** `HEALTHCHECK` on `/up` in the Dockerfile
 - **reco:** Daily ranking of the top 20 US stocks and top 10 crypto from free end-of-day data (Alpaca IEX daily bars, Binance public klines) by volatility-adjusted momentum, stored per date, with the `reco:daily` job at 00:30 UTC (ADR-0023, SDD-07)
 - **web:** `/recommendations` page and `GET /api/recommendations/latest`; the CVM Resolution 20 disclaimer is on the page and in the payload
 - **telegram:** One message per market with the disclaimer first and last; sending is off without `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
