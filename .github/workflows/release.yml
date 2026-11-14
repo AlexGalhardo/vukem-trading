@@ -1,8 +1,9 @@
 name: Release
 
-# Tag vX.Y.Z on main: tests, container image on GHCR and a GitHub release whose
-# notes are the matching CHANGELOG.md section. A tag without that section does
-# not publish. Same flow as AlexGalhardo/vukem releases and hexascore-app.
+# Tag vX.Y.Z on main: tests, the container image on GHCR and Docker Hub
+# (smoke tested before the push, then signed and attested) and a GitHub release
+# whose notes are the matching CHANGELOG.md section. A tag without that section
+# does not publish. Same flow as AlexGalhardo/vukem releases and hexascore-app.
 on:
   push:
     tags: ["v*.*.*"]
@@ -20,13 +21,9 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  test:
+    name: Tests before anything is published
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # create the GitHub release
-      packages: write # push the image to GHCR
-      id-token: write # Sigstore identity for build provenance
-      attestations: write # build provenance attestations
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,6 +34,129 @@ jobs:
           go-version-file: go.mod
       # Database integration tests skip without TEST_DATABASE_URL; CI already ran them on main.
       - run: go test -race -count=1 ./...
+
+  # One image runs both services: the web app (the entrypoint) and the engine
+  # (/app/engine, set as the start command on the platform).
+  image:
+    name: Image to GHCR and Docker Hub, signed
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      GHCR_IMAGE: ghcr.io/alexgalhardo/vukem-trading
+      HUB_IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/vukem-trading
+    permissions:
+      contents: read
+      packages: write # push the image to GHCR
+      id-token: write # Sigstore OIDC identity for cosign and attestations
+      attestations: write # build provenance attestation of the image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.VERSION }}
+          persist-credentials: false
+      # X.Y.Z, X.Y and latest only for a stable tag. A pre-release such as
+      # v1.2.0-rc.1 gets its own exact tag and must never move latest.
+      - name: Resolve the image tags
+        id: meta
+        run: |
+          version="${VERSION#v}"
+          tags=("$GHCR_IMAGE:$version" "$HUB_IMAGE:$version")
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            for image in "$GHCR_IMAGE" "$HUB_IMAGE"; do
+              tags+=("$image:${version%.*}" "$image:latest")
+            done
+          fi
+          {
+            echo "version=$version"
+            echo "tags<<EOF"
+            printf '%s\n' "${tags[@]}"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Smoke build: one platform, loaded into the local daemon, never pushed.
+      # The push build below reuses its layers through the GitHub cache.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: smoke:vukem-trading
+          build-args: RAILWAY_GIT_COMMIT_SHA=${{ env.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # /up is the liveness route and does not touch the database, so the web
+      # process boots without PostgreSQL. Production needs APP_KEY and an
+      # https APP_URL.
+      - name: Smoke test the image
+        run: |
+          docker run -d --name smoke -p 127.0.0.1:3000:3000 \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e APP_URL=https://app.example.com \
+            smoke:vukem-trading
+          code=000
+          for _ in $(seq 1 30); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/up || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          if [ "$code" != 200 ]; then
+            echo "::error::the image answered $code on /up"
+            docker logs smoke
+            exit 1
+          fi
+          docker rm -f smoke
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: RAILWAY_GIT_COMMIT_SHA=${{ env.VERSION }}
+          cache-from: type=gha
+          sbom: true
+          provenance: mode=max
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      # The same digest is in both registries, so each reference is signed.
+      - name: Sign the image digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "$GHCR_IMAGE@$DIGEST"
+          cosign sign --yes "$HUB_IMAGE@$DIGEST"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/alexgalhardo/vukem-trading
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: docker.io/${{ vars.DOCKERHUB_USERNAME }}/vukem-trading
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: GitHub release
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.VERSION }}
+          persist-credentials: false
       # The notes come from the default branch: a tag on an older commit (a
       # retroactive or re-published release) predates its own CHANGELOG section.
       - name: Extract the CHANGELOG section
@@ -48,33 +168,7 @@ jobs:
           git show FETCH_HEAD:CHANGELOG.md > "$RUNNER_TEMP/CHANGELOG.md"
           awk -v h="## [$version]" 'index($0, h) == 1 {p=1; next} p && index($0, "## [") == 1 {exit} p' "$RUNNER_TEMP/CHANGELOG.md" > release-notes.md
           test -s release-notes.md || { echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; }
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ env.VERSION }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
-      - id: push
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: RAILWAY_GIT_COMMIT_SHA=${{ env.VERSION }}
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      - uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
         with:
           body_path: release-notes.md
           tag_name: ${{ env.VERSION }}
