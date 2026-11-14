@@ -51,6 +51,17 @@ docker compose up --build
 
 Open <http://localhost:3000>. Setup guides: [local with Docker](docs/setup-local-with-docker.md), [VPS with Docker](docs/setup-vps-with-docker.md) and [Railway](docs/setup-in-railway.md).
 
+Image smoke (the same check the release workflow runs before it pushes; `/up` does not touch the database):
+
+```sh
+docker build -t vukem-trading:smoke .
+docker run -d --name smoke -p 127.0.0.1:3000:3000   -e APP_KEY="base64:$(openssl rand -base64 32)" -e APP_URL=https://app.example.com vukem-trading:smoke
+curl -fsS http://127.0.0.1:3000/up
+docker rm -f smoke
+```
+
+Each `vX.Y.Z` tag publishes `ghcr.io/alexgalhardo/vukem-trading` and `alexgalhardo/vukem-trading` (Docker Hub) as `X.Y.Z`, `X.Y` and `latest` (stable tags only), signed with cosign and with a provenance attestation. The one image runs the web app (entrypoint) and the engine (`/app/engine`).
+
 Frontend tooling uses Bun 1.4.4:
 
 ```sh
