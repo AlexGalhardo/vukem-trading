@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **reco:** Daily ranking of the top 20 US stocks and top 10 crypto from free end-of-day data (Alpaca IEX daily bars, Binance public klines) by volatility-adjusted momentum, stored per date, with the `reco:daily` job at 00:30 UTC (ADR-0023, SDD-07)
+- **web:** `/recommendations` page and `GET /api/recommendations/latest`; the CVM Resolution 20 disclaimer is on the page and in the payload
+- **telegram:** One message per market with the disclaimer first and last; sending is off without `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
+- **reco:** Daily-bar backtest of a momentum rotation with stops, fees and slippage (return, buy-and-hold benchmark, drawdown, Sharpe, hit rate, costs), deterministic and covered by a look-ahead test
+- **paper:** `reco:paper` command and `internal/paper` runner for Alpaca paper (OTO entry with attached stop) and the Binance spot testnet (fill, then stop-limit); off unless `PAPER_TRADING=true`; live hosts refused by tests
+- **adapters:** Alpaca daily bars, stop-protected entries, host allow-list with loopback overrides for tests; Binance testnet stop leg and exchange filters; `SendMessage` for Telegram
+
 ### Changed
 
 - **ci:** Run the Uptime workflow only on demand (`workflow_dispatch`) while the Railway endpoint is unavailable

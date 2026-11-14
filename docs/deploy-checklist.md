@@ -31,7 +31,8 @@ Environment variables, names only (set them in the Railway editor; never commit 
 | `SOCIAL_GOOGLE_CLIENT_ID` | web | Google Web OAuth client id |
 | `SOCIAL_GOOGLE_CLIENT_SECRET` | web | Google Web OAuth client secret |
 | `ALPACA_API_KEY`, `ALPACA_API_SECRET` | web (history import), engine | Alpaca Paper keys; optional |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | engine | Optional operational alerts |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | engine, and web for the daily ranking | Optional operational alerts; the daily ranking job runs in the process with `SCHEDULE_IN_SERVE=true` (web by default), so that service needs them to send the ranking |
+| `PAPER_TRADING`, `BINANCE_TESTNET_API_KEY`, `BINANCE_TESTNET_API_SECRET` | whichever service runs `reco:paper` | Optional; paper order placement stays off unless `PAPER_TRADING=true` |
 | `MCP_TOKEN` | web | Optional; leave unset to keep `/mcp` off |
 | `LIVE_TRADING_ENABLED`, `LIVE_TRADING_ACK`, `LIVE_MAX_ORDER_VALUE`, `LIVE_MAX_DAILY_LOSS_BPS` | none | Leave unset; there is no live adapter |
 

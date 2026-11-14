@@ -12,5 +12,6 @@ failures, acceptance criteria and open items. It is not code already implemented
 | SDD-04 | [Backtesting](04-backtesting.md) | Proposed |
 | SDD-05 | [Railway and operations](05-railway-operations.md) | Destination confirmed; design proposed |
 | SDD-06 | [Adapters and simulation](06-adapters-simulation.md) | Adapters confirmed; data pending |
+| SDD-07 | [Daily ranking, backtest and paper runner](07-daily-ranking-and-paper-runner.md) | Implemented |
 
 Changing a contract requires reviewing the associated ADR, data model, plan and tests.

@@ -17,7 +17,7 @@ Owner decisions are in [docs/brainstorming.md](docs/brainstorming.md); the resea
 - Real Google OAuth with the final domain, Alpaca Paper credentials, and Telegram alerts configured in production (Phases 1, 4, 5).
 - A licensed B3 intraday dataset and significant out-of-sample data (Phases 2, 3).
 - A prolonged paper-trading observation and the keep-or-disable decision per strategy (Phase 6).
-- A Binance testnet account for a crypto paper adapter (11.3), order-book data for market making (12.5), and a live feed for a push channel (13.6).
+- Binance testnet and Alpaca paper accounts to validate the paper runner (11.3, 19.7), order-book data for market making (12.5), and a live feed for a push channel (13.6).
 - The OpenSSF best-practices badge registration (7.11) and the live-readiness gate (Phase 17), which is a decision, not a build.
 
 Real capital stays out of scope.
@@ -278,6 +278,19 @@ No live adapter is built in this roadmap. Writing an ADR is the only allowed wor
 - [x] **18.6 Caching:** hashed assets stay immutable and gzip (347.9 kB to 110.7 kB for the React runtime chunk); dynamic responses are `private, no-store` (`TestPrivateResponsesAreNeverCached`). Lookup columns were already indexed.
 - [ ] **18.7 Owner gate:** add the `app.trading.vukem.dev` domain and DNS on Railway, set `APP_URL`, add the Google redirect URI, then run the verification list in the deploy checklist.
 
+### Phase 19: Daily ranking, EOD backtest and paper runner (2026-11)
+
+Owner decision 8.d: **US equities and crypto**. Design: [ADR-0023](docs/adrs/0023-daily-ranking-and-paper-runner.md), [SDD-07](docs/sdd/07-daily-ranking-and-paper-runner.md).
+
+- [x] **19.1 Daily ranking (8.b):** top 20 US stocks and top 10 crypto over about 30 days from free end-of-day data (Alpaca IEX daily with a free key, Binance public klines), volatility-adjusted momentum, a stored report per date. Assert: `go test ./internal/reco`, `TestRecoDailyStoresSendsAndServesTheReport`.
+- [x] **19.2 Job, dashboard and Telegram:** `reco:daily` at 00:30 UTC, the `/recommendations` page, one Telegram message per market (off without `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`). Assert: `TestRecoDailyWithoutTelegramAndWithOneMarketDown`, `bun run build`.
+- [x] **19.3 Disclaimer (CVM Resolution 20):** on the dashboard, in the API and in every Telegram message. Assert: `TestEveryMessageStartsAndEndsWithTheDisclaimer`, `TestRecoEndpointIsPrivateAndCarriesTheDisclaimerWhenEmpty`.
+- [x] **19.4 Backtest (8.c):** one momentum rotation with stop, fees and slippage; return, benchmark, drawdown, Sharpe, hit rate, costs; deterministic and free of look-ahead. Assert: `TestBacktestNeverLooksAhead`, `TestBacktestIsDeterministicAndReportsCosts`.
+- [x] **19.5 Paper runner (8.c):** `reco:paper` on Alpaca paper (OTO stop) and Binance testnet (fill, then stop-limit), off unless `PAPER_TRADING=true`, live hosts refused. Assert: `TestMoney_NoLiveEndpointCanBeUsedByThePaperBrokers`, `TestMoney_AlpacaRefusesLiveAndForeignHostsBeforeAnyRequest`.
+- [ ] **19.6 B3 end-of-day:** not supported; needs a free source with verified terms (brapi free needs a token, one ticker per call).
+- [ ] **19.7 Paper exits and reconciliation:** `reco:paper` only enters; rotation exits, working-order cleanup and a run against real Alpaca paper and Binance testnet accounts are open (owner credentials).
+- [ ] **19.8 Legal review:** a lawyer's opinion on Resolution CVM 20 before the ranking is shared with anyone else or charged for.
+
 #### Owner gates still open (nothing here can be faked in code)
 
 | Gate | Needs |
@@ -285,7 +298,7 @@ No live adapter is built in this roadmap. Writing an ADR is the only allowed wor
 | 2.x, 3.x licensed B3 intraday dataset and out-of-sample evaluation | Licensed data |
 | 4.x Alpaca Paper contracts, cancels and fills; 5.x Google, broker and Telegram in production | Real accounts and production secrets |
 | 6.x paper observation and keep-or-disable decisions | Time |
-| 11.3 crypto testnet, 12.5 market making, 13.6 live push channel | Binance testnet account, order-book data, live feed |
+| 11.3, 19.7 crypto testnet and paper runner validation, 12.5 market making, 13.6 live push channel | Binance testnet account, order-book data, live feed |
 | 7.11 OpenSSF badge; 17 live-readiness sign-off (ADR-0021) | Owner decision |
 | `ANTHROPIC_API_KEY` repository secret for the agent half of the `Security audit` workflow | Owner secret |
 
