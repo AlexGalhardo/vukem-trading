@@ -14,6 +14,6 @@ func All() []schema.Migration {
 		m20261103130843CreateUsersTable(),
 		m20261103130844CreateAuthTables(),
 		m20261103130845CreateSocialAccountsTable(),
-		terminalSchema(), artifactsSchema(), preferencesSchema(),
+		terminalSchema(), artifactsSchema(), preferencesSchema(), recommendationsSchema(),
 	}...)
 }

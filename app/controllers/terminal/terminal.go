@@ -18,6 +18,7 @@ import (
 	"github.com/AlexGalhardo/vukem/web"
 
 	"github.com/AlexGalhardo/vukem-trading/internal/providers"
+	"github.com/AlexGalhardo/vukem-trading/internal/reco"
 	"github.com/AlexGalhardo/vukem-trading/internal/trading"
 )
 
@@ -746,4 +747,24 @@ func (h *Controller) Artifact(c *web.Ctx) error {
 		return errs.New(404, "Artifact not found")
 	}
 	return c.JSON(200, raw)
+}
+
+// Recommendations returns the newest daily ranking, or an empty report that still carries the disclaimer
+// when the job has not run yet.
+func (h *Controller) Recommendations(c *web.Ctx) error {
+	db, err := h.App.DB()
+	if err != nil {
+		return err
+	}
+	rep, ok, err := reco.Store{DB: db}.Latest(c.Context())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		rep = reco.Report{
+			Disclaimer: reco.Disclaimer, Criterion: reco.Criterion, Strategy: reco.StrategyDescription,
+			B3: reco.B3Note, Markets: []reco.MarketReport{},
+		}
+	}
+	return c.JSON(200, rep)
 }

@@ -58,7 +58,7 @@ func Web(r *router.Router, app *vukem.App) error {
 	})
 	required := auth.Required(acc.Web)
 	r.Get("/", h.Page("overview")).Name("home").Use(required)
-	for _, section := range []string{"market", "strategies", "backtests", "orders", "positions", "risk", "audit", "settings"} {
+	for _, section := range []string{"market", "strategies", "backtests", "orders", "positions", "risk", "audit", "settings", "recommendations"} {
 		r.Get("/"+section, h.Page(section)).Use(required)
 	}
 	r.Get("/dashboard", func(c *web.Ctx) error { return c.Redirect("/") }).Use(required)
@@ -75,6 +75,7 @@ func Web(r *router.Router, app *vukem.App) error {
 	r.Post("/api/datasets/fetch", h.Fetch).Use(required)
 	r.Get("/api/datasets/{id}", h.Dataset).Use(required)
 	r.Get("/api/strategy-kinds", h.Kinds).Use(required)
+	r.Get("/api/recommendations/latest", h.Recommendations).Use(required)
 	r.Get("/api/metrics", h.Metrics).Use(required)
 	r.Get("/api/stream", h.Stream).Use(required)
 	r.Get("/api/preferences", h.Preferences).Use(required)
