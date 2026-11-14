@@ -13,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AlexGalhardo/vukem/vukemtest"
 	d "github.com/shopspring/decimal"
 
+	"github.com/AlexGalhardo/vukem-trading/app/commands"
+	"github.com/AlexGalhardo/vukem-trading/bootstrap"
 	"github.com/AlexGalhardo/vukem-trading/internal/reco"
 	"github.com/AlexGalhardo/vukem-trading/internal/trading"
 )
@@ -134,4 +137,26 @@ func TestRecoEndpointIsPrivateAndCarriesTheDisclaimerWhenEmpty(t *testing.T) {
 	a.Client(t).AcceptJSON().GetJSON("/api/recommendations/latest").AssertUnauthorized()
 	signIn(t, a).AcceptJSON().GetJSON("/api/recommendations/latest").AssertOK().
 		AssertJSONPath("disclaimer", reco.Disclaimer)
+}
+
+func TestRecoPaperIsOffByDefaultAndNeedsAFreshRanking(t *testing.T) {
+	a := terminalApp(t, "owner", "owner@example.com", true)
+	if err := (commands.RecoPaper{}).Run(t.Context(), a.App, nil); err != nil {
+		t.Fatal("paper placement must be a no-op without PAPER_TRADING:", err)
+	}
+	on := vukemtest.New(t, bootstrap.New, vukemtest.Options{Env: map[string]string{"PAPER_TRADING": "true"}})
+	if err := (commands.RecoPaper{}).Run(t.Context(), on.App, nil); err == nil {
+		t.Fatal("paper placement without a stored ranking must fail")
+	}
+	db, err := on.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := reco.Report{Date: "2020-01-02", Disclaimer: reco.Disclaimer}
+	if err := (reco.Store{DB: db}).Save(t.Context(), old); err != nil {
+		t.Fatal(err)
+	}
+	if err := (commands.RecoPaper{}).Run(t.Context(), on.App, nil); err == nil {
+		t.Fatal("a stale ranking was traded")
+	}
 }
