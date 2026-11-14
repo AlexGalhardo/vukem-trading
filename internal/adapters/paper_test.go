@@ -80,7 +80,9 @@ func TestAlpacaDailyBarsPagesAndKeysByExchangeDate(t *testing.T) {
 func TestAlpacaDailyBarsRejectsInvalidBars(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"bars":{"AAPL":[{"t":"2026-11-11T05:00:00Z","o":"10","h":"8","l":"9","c":"10","v":"1"}]}}`))
+		_, _ = w.Write(
+			[]byte(`{"bars":{"AAPL":[{"t":"2026-11-11T05:00:00Z","o":"10","h":"8","l":"9","c":"10","v":"1"}]}}`),
+		)
 	}))
 	t.Cleanup(srv.Close)
 	a := Alpaca{Key: "k", Secret: "s", DataURL: srv.URL}
