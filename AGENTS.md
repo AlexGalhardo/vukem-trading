@@ -42,7 +42,7 @@ Run the focused checks for the task; CI runs the full set. Git hooks: `git confi
 
 - `cmd/app`, `cmd/engine`, `cmd/e2e`: web server, paper engine worker, end-to-end fixture server.
 - `app/`, `routes/`, `bootstrap/`: Vukem application code (accounts, controllers, providers, routes).
-- `internal/trading`, `internal/engine`, `internal/adapters`: domain, execution loop and broker or data adapters.
+- `internal/trading`, `internal/engine`, `internal/adapters`: domain, execution loop and broker or data adapters. `internal/reco`: daily ranking and EOD backtest; `internal/paper`: paper entries (ADR-0023).
 - `resources/js`: Inertia React terminal. `site/`: Astro documentation site (same shell and pinned versions as `vukem/site`) published at trading.vukem.dev; any change under `site/content/docs` needs `npm run last-updated` in `site/`.
 - `docs/`: product, architecture, ADRs, SDDs, setup guides and the [trading knowledge base](docs/trading/README.md).
 - `.agents/rules/`: path-scoped coding rules. `.agents/skills/`: project skills. `CLAUDE.md` points here.
