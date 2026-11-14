@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -17,18 +18,51 @@ import (
 	"github.com/AlexGalhardo/vukem-trading/internal/trading"
 )
 
+const (
+	alpacaPaperHost = "paper-api.alpaca.markets"
+	alpacaDataHost  = "data.alpaca.markets"
+)
+
+// Alpaca talks to the Alpaca paper-trading and market-data APIs. It refuses every other host, so the
+// live trading endpoint cannot be configured by mistake: PaperURL and DataURL exist for tests and only
+// accept loopback addresses.
 type Alpaca struct {
 	Key, Secret string
 	Client      *http.Client
+	PaperURL    string
+	DataURL     string
+}
+
+func (a Alpaca) base(data bool) (string, error) {
+	raw, allowed := a.PaperURL, alpacaPaperHost
+	if data {
+		raw, allowed = a.DataURL, alpacaDataHost
+	}
+	if raw == "" {
+		return "https://" + allowed, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "", errors.New("invalid Alpaca address")
+	}
+	if h := u.Hostname(); h != allowed && !isLoopback(h) {
+		return "", errors.New("only the Alpaca paper and market-data hosts are allowed")
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func isLoopback(host string) bool {
+	ip := net.ParseIP(host)
+	return host == "localhost" || (ip != nil && ip.IsLoopback())
 }
 
 func (a Alpaca) request(ctx context.Context, method, path string, input, output any, data bool) error {
 	if a.Key == "" || a.Secret == "" {
 		return errors.New("Alpaca Paper credentials missing")
 	}
-	host := "https://paper-api.alpaca.markets"
-	if data {
-		host = "https://data.alpaca.markets"
+	host, err := a.base(data)
+	if err != nil {
+		return err
 	}
 	var body io.Reader
 	if input != nil {

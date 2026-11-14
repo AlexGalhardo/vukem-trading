@@ -222,3 +222,102 @@ func (b BinanceTestnet) Balances(ctx context.Context) (map[string]d.Decimal, err
 	}
 	return out, nil
 }
+
+// SubmitStop sends the protective leg of a long entry: a SELL STOP_LOSS_LIMIT GTC that triggers at stop
+// and rests at limit (at or below the stop, so a gap still fills). The spot API has no attached-stop entry,
+// so the caller places this right after the entry is acknowledged and treats an entry without one as unsafe.
+func (b BinanceTestnet) SubmitStop(
+	ctx context.Context,
+	symbol string,
+	qty, stop, limit d.Decimal,
+	clientID string,
+) (TestnetAck, error) {
+	if !qty.IsPositive() || !stop.IsPositive() || !limit.IsPositive() || clientID == "" {
+		return TestnetAck{}, errors.New("quantity, stop, limit and client order id are required")
+	}
+	if limit.GreaterThan(stop) {
+		return TestnetAck{}, errors.New("the stop limit must not be above the stop price")
+	}
+	body, err := b.call(ctx, http.MethodPost, "/api/v3/order", url.Values{
+		"symbol": {symbol}, "side": {"SELL"}, "type": {"STOP_LOSS_LIMIT"}, "timeInForce": {"GTC"},
+		"quantity": {qty.String()}, "price": {limit.String()}, "stopPrice": {stop.String()},
+		"newClientOrderId": {clientID},
+	})
+	if err != nil {
+		return TestnetAck{}, err
+	}
+	return parseAck(body)
+}
+
+// SymbolFilters is the part of a pair's trading rules that sizing and pricing must respect.
+type SymbolFilters struct {
+	Tick, Step, MinQty, MinNotional d.Decimal
+}
+
+// Filters reads the pair's tick size, lot step, minimum quantity and minimum notional from the public
+// exchange-info endpoint of the testnet.
+func (b BinanceTestnet) Filters(ctx context.Context, symbol string) (SymbolFilters, error) {
+	base, err := b.base()
+	if err != nil {
+		return SymbolFilters{}, err
+	}
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, base+"/api/v3/exchangeInfo?"+url.Values{"symbol": {symbol}}.Encode(), nil,
+	)
+	if err != nil {
+		return SymbolFilters{}, err
+	}
+	client := b.Client
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return SymbolFilters{}, errors.New("testnet request failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return SymbolFilters{}, fmt.Errorf("testnet returned HTTP %d", resp.StatusCode)
+	}
+	var info struct {
+		Symbols []struct {
+			Symbol  string `json:"symbol"`
+			Filters []struct {
+				Type        string `json:"filterType"`
+				TickSize    string `json:"tickSize"`
+				StepSize    string `json:"stepSize"`
+				MinQty      string `json:"minQty"`
+				MinNotional string `json:"minNotional"`
+			} `json:"filters"`
+		} `json:"symbols"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, binanceMaxBody)).Decode(&info); err != nil {
+		return SymbolFilters{}, errors.New("testnet returned an unreadable exchange info")
+	}
+	var out SymbolFilters
+	for _, s := range info.Symbols {
+		if s.Symbol != symbol {
+			continue
+		}
+		for _, f := range s.Filters {
+			switch f.Type {
+			case "PRICE_FILTER":
+				out.Tick, err = d.NewFromString(f.TickSize)
+			case "LOT_SIZE":
+				out.Step, err = d.NewFromString(f.StepSize)
+				if err == nil {
+					out.MinQty, err = d.NewFromString(f.MinQty)
+				}
+			case "NOTIONAL", "MIN_NOTIONAL":
+				out.MinNotional, err = d.NewFromString(f.MinNotional)
+			}
+			if err != nil {
+				return SymbolFilters{}, errors.New("testnet returned an invalid filter")
+			}
+		}
+		if out.Tick.IsPositive() && out.Step.IsPositive() {
+			return out, nil
+		}
+	}
+	return SymbolFilters{}, fmt.Errorf("no trading rules for %s on the testnet", symbol)
+}
