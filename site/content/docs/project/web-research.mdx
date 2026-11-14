@@ -369,3 +369,111 @@ The configuration was validated via `serviceInstanceUpdate`, without these two f
 with migrations pre-deploy, readiness and hibernation disabled. See ADR-0014.
 The web was published and `/login` returned HTTP 200 on the Railway domain. This does not
 validate Google OAuth nor the broker, whose credentials are still placeholders/empty.
+
+## Pesquisa 2026-11-14
+
+Escopo: pesquisa para o recomendador (ações B3 e EUA, cripto) e para o bot de day trade em paper trading e backtest. Nada aqui ativa integração, ordem real ou decisão aceita. Fontes oficiais foram abertas quando possível; quando a página não abriu ou não trouxe o dado, está marcado como não verificado. Preços e limites mudam: revalidar antes de contratar.
+
+### Resumo executivo
+
+- **A meta de 10 a 20% ao dia não é realista.** Composto de 10% por dia durante 250 pregões dá fator de aproximadamente 2,2 x 10^10; 20% por dia dá 6,2 x 10^19 (conta própria, sem custos). Nenhuma fonte encontrada sustenta essa meta; a melhor evidência disponível aponta o contrário (seção 4).
+- **Day trade de varejo perde dinheiro na média.** No estudo brasileiro de Chague, De-Losso e Giovannetti, 97% dos que persistiram mais de 300 pregões perderam dinheiro; só 0,4% ganhou mais que um caixa de banco por dia.
+- **Dados gratuitos existem, mas com limites duros e atraso.** Para o recomendador diário (ações e cripto, janela de 30 dias), um plano gratuito ou barato basta se atraso de 15 a 60 minutos for aceitável. Nenhuma fonte gratuita verificada entrega B3 intraday.
+- **Paper trading automatizado é viável nos EUA** (Alpaca Paper, plano Basic) e em cripto (Binance testnet). Para B3 não encontrei documentação oficial de API de corretora; a rota existente (replay interno) continua a mais segura.
+- **Regulação:** a CVM não dá regra direta para robô que recomenda ações sem supervisão humana. Um bot que ranqueia ativos com estratégia padronizada pode cair na exigência de analista credenciado. Disclaimer e parecer jurídico são necessários antes de divulgar ou cobrar.
+- **Telegram:** em chat individual, evitar mais de 1 mensagem por segundo; em grupo, no máximo 20 por minuto; acima disso, erro 429.
+
+### 1. Fontes de dados
+
+| Fonte | Mercado | Custo e limites verificados | Atraso e intraday | URL |
+| --- | --- | --- | --- | --- |
+| brapi | B3 | Gratuito: 15.000 req/mês, 1 ticker por chamada. Startup: 150.000 req/mês, 10 tickers. Pro: 500.000 req/mês, 20 tickers. Preço: a página de preços mostra R$ 99,99 (Startup) e R$ 116,66 (Pro) com cobrança anual; uma FAQ antiga cita R$ 119,99 e R$ 139,99. Valores divergem: conferir antes de contratar. | Gratuito atualiza a cada 30 min, sem intraday (só 1d). Startup a cada 15 min, sem intraday. Pro a cada 5 min, com histórico de 1m a 60m. Nenhum plano é tick a tick. Sem chave: 20 req/min por IP. | [https://brapi.dev/pricing](https://brapi.dev/pricing), [https://brapi.dev/faq/quais-as-limitacoes](https://brapi.dev/faq/quais-as-limitacoes) |
+| Yahoo Finance | B3 e EUA | Não verificado nesta rodada (sem fonte oficial aberta). Não é API oficial; termos de uso restritivos. | Não verificado | não verificado |
+| B3 (dados oficiais) | B3 | Não reabri nesta rodada. A seção 4.3 do relatório de 2026-11-03 registra mudança de política comercial. | Intraday licenciado e pago | ver seção 4 do relatório de 2026-11-03 |
+| Alpaca (IEX) | EUA | Plano Basic é o padrão tanto para conta Paper quanto Live. Real-time apenas IEX (fontes secundárias: cerca de 2 a 5% do volume), 30 símbolos em websocket, histórico limitado aos últimos 15 minutos. Algo Trader Plus: US$ 99/mês, todas as bolsas americanas em tempo real, sem restrição de histórico. Broker API: Standard incluído; StandardPlus3000 US$ 500; StandardPlus5000 US$ 1.000; StandardPlus10000 US$ 2.000. | Basic: IEX em tempo real; SIP só com atraso de 15 min. Não verificado se conta Paper acessa Algo Trader Plus. | [https://docs.alpaca.markets/docs/about-market-data-api](https://docs.alpaca.markets/docs/about-market-data-api) (atualizado em 2026-10-06) |
+| Massive (ex-Polygon.io) | EUA | Só fontes de terceiros: plano Basic gratuito com 5 chamadas/min e dados com atraso de 15 min ou de fim de dia; Starter cerca de US$ 29/mês; tempo real a partir de plano superior. Rebrand em 2025-10-30 segundo as fontes (uma diz 2026). Página oficial de preços não aberta. | Gratuito não é intraday em tempo real. | não verificado oficialmente; comparação do próprio fornecedor: [https://massive.com/compare/massive-vs-alpaca](https://massive.com/compare/massive-vs-alpaca) |
+| Alpha Vantage | EUA e outros | Gratuito: 25 requisições por dia (página oficial). Limite por minuto e cobertura de intraday no gratuito não declarados. Pagos a partir de US$ 49,99/mês (75 req/min). | 25/dia não serve para 20 ações com intraday. | [https://www.alphavantage.co/premium/](https://www.alphavantage.co/premium/) |
+| Twelve Data | EUA, forex, cripto | Gratuito: 800 créditos/dia, 8 req/min. Cobre ações e ETFs americanos, forex e cripto em tempo real. Não lista B3. Preços pagos divergentes na própria página (Grow US$ 79 ou US$ 29; Pro US$ 229 ou US$ 99). | Gratuito declarado como real-time; atraso não informado. | [https://twelvedata.com/pricing](https://twelvedata.com/pricing) |
+| Finnhub | EUA | Não verificado: a página aberta não trouxe limites nem a política de intraday do gratuito. | Não verificado | [https://finnhub.io/pricing](https://finnhub.io/pricing) (conteúdo insuficiente) |
+| CoinGecko | Cripto | Demo (gratuito): 10 mil créditos/mês, 100 req/min, histórico de 1 ano (diário e horário), frescor de dados a partir de 60 s. Basic: US$ 35/mês (100 mil créditos, 300 req/min). Analyst: US$ 129/mês, tempo real. | Demo não é tempo real. | [https://www.coingecko.com/en/api/pricing](https://www.coingecko.com/en/api/pricing) |
+| Binance (público) | Cripto | Klines públicos sem chave; limites por IP e peso (ver docs). Já implementado no projeto (`internal/providers`). | Candles fechados; intraday grátis. | [https://developers.binance.com/en/docs/products/spot/testnet/rest-api](https://developers.binance.com/en/docs/products/spot/testnet/rest-api) (testnet) e a documentação de market data de produção |
+
+**Leitura para o projeto:** o recomendador diário (ações B3 e EUA, cripto, janela de 30 dias) cabe no plano pago da brapi (Startup ou Pro) e no CoinGecko Demo, desde que atualização de 5 a 60 min seja aceita. Intraday de B3 exige plano Pro ou licença de dados. Para EUA, Alpaca Basic (IEX) serve ao paper; análise de volume completo exige SIP em plano pago.
+
+### 2. Execução automatizada e paper trading
+
+- **Alpaca Paper (EUA):** a conta Paper usa o mesmo plano de dados Basic. Ordens são simuladas. Fonte: [https://docs.alpaca.markets/docs/about-market-data-api](https://docs.alpaca.markets/docs/about-market-data-api). Os contratos de ordem e cancelamento já têm testes no projeto (ROADMAP fase 4); falta validar com conta Paper real.
+- **Binance testnet (cripto):** REST em `https://testnet.binance.vision/api`; WebSocket API em `wss://ws-api.testnet.binance.vision/ws-api/v3`. Limites seguem os da API de produção e devem ser lidos de `/api/v3/exchangeInfo`; excesso retorna 429. Fonte: [https://developers.binance.com/en/docs/products/spot/testnet/rest-api](https://developers.binance.com/en/docs/products/spot/testnet/rest-api). O adaptador já existe (`adapters.BinanceTestnet`); falta validar contra testnet real (ROADMAP 11.3).
+- **Brasil (MetaTrader 5, Nelogica Profit / ProfitDLL, BTG, XP, Clear):** não encontrei documentação oficial de API de envio de ordens para nenhuma corretora brasileira nesta rodada. Fontes secundárias (reviews de afiliados) citam Profit BTG e Profit Pro (XP, Clear) com roteamento de ordens pela interface, e MT5 com Expert Advisors para automação. Não verificado: existência de API pública de ordens, requisitos de conta, custo e se há conta demo com dados de B3. Próximo passo: pedir a documentação da ProfitDLL à Nelogica (suporte citado em manual do Itaú: &lt;suporte@nelogica.com.br>) e confirmar com cada corretora.
+- **Recomendação de execução:** manter replay interno para B3, que já é a decisão do projeto. Não há necessidade de conta corretora para o escopo atual.
+
+### 3. Regulação e impostos (Brasil)
+
+**CVM sobre robôs.** A página oficial da CVM separa robôs consultores (recomendam e o investidor executa), robôs gestores (investem por conta do cliente) e robôs de ordens (automatizam entradas, saídas e envio de ordens). Sobre credenciamento, a página cita o Ofício-Circular 2/2019: a necessidade de credenciamento é restrita aos serviços que envolvem estratégias pré-definidas, e não abrange quem comercializa apenas sistemas automatizados. Fonte: [https://www.gov.br/investidor/pt-br/investir/como-investir/profissionais-do-mercado/robos-de-investimentos](https://www.gov.br/investidor/pt-br/investir/como-investir/profissionais-do-mercado/robos-de-investimentos).
+
+- **Implicação para o recomendador:** se o bot ranqueia ativos e envia recomendação com estratégia padronizada, há risco de ser lido como serviço de análise de valores mobiliários (Resolução CVM 20/2021, credenciamento de analista). A CVM não traz regra direta para robô que gera recomendações sem supervisão humana; não encontrei a resposta oficial nesta rodada. A Resolução CVM 20 consolidada está em [https://conteudo.cvm.gov.br/export/sites/cvm/legislacao/resolucoes/anexos/001/resol020consolid.pdf](https://conteudo.cvm.gov.br/export/sites/cvm/legislacao/resolucoes/anexos/001/resol020consolid.pdf), não lida integralmente.
+- **Disclaimer recomendado, independente da resposta final:** conteúdo informativo, sem oferta nem recomendação individual de investimento; rentabilidade passada não garante resultado; o bot não envia ordens; o usuário decide e responde pelas próprias operações. Consultar advogado antes de cobrar, divulgar publicamente ou vender assinatura.
+- **Sinal da CVM sobre day trade:** a mesma página diz que não há estudos indicando que robôs aumentem a lucratividade de pessoas físicas.
+
+**Imposto de renda.**
+
+- Day trade de ações: alíquota de 20% sobre o ganho líquido mensal (fontes secundárias de corretoras e contadorias; a página da Receita sobre DARF aberta não traz os códigos). Código 6015 é citado por várias fontes para renda variável.
+- IRRF de 1% sobre o ganho de day trade e 0,005% em swing, com dedução do DARF mensal. A base da retenção (bruto ou líquido diário) diverge entre fontes. Base normativa: IN RFB 1.585/2015, [https://www.normaslegais.com.br/legislacao/instrucao-normativa-1585-2015.htm](https://www.normaslegais.com.br/legislacao/instrucao-normativa-1585-2015.htm) (texto não aberto nesta rodada; a regra veio de fontes secundárias).
+- Cripto: a isenção para vendas mensais até R$ 35 mil e sua aplicação ao day trade de cripto divergem entre as fontes. Código de DARF de cripto citado como 4600 em várias fontes, não confirmado na Receita. Declaração de Criptoativos (IN RFB 2.291/2025) citada como vigente na prática desde 2026-07-01, por fontes secundárias.
+- **Não verificado oficialmente:** alíquotas de cripto, código de DARF de cripto e base do IRRF. Não usar esses valores no código sem confirmação na Receita ou com contador. Referência geral: [https://www.gov.br/receitafederal](https://www.gov.br/receitafederal).
+
+### 4. Evidência sobre day trade de varejo
+
+**Brasil (Chague, De-Losso, Giovannetti, "Day Trading for a Living?").** Amostra de traders de mini-índice futuro na B3 que começaram entre 2013 e 2015. Resultados no resumo: 97% dos que persistiram mais de 300 pregões perderam dinheiro; 0,4% ganhou mais que um caixa de banco (cerca de US$ 54/dia); o melhor individual teve média diária de US$ 310. Os autores apontam limite de representatividade e não consideram imposto de renda nem custos de curso e plataforma. Fonte: [https://econpapers.repec.org/RePEc:spa:wpaper:2019wpecon47](https://econpapers.repec.org/RePEc:spa:wpaper:2019wpecon47). Fontes secundárias citam 1,1% acima do salário mínimo e 7,9% que persistiu mais de 300 pregões (de 19.646 iniciantes); as contagens divergem entre versões (1.551 em uma, 554 em outra descrita pela imprensa). Usar o resumo oficial, não os números secundários. Imprensa: [https://www.bloombergquint.com/onweb/day-traders-in-brazil-study-would-ve-done-better-with-9-to-5-job](https://www.bloombergquint.com/onweb/day-traders-in-brazil-study-would-ve-done-better-with-9-to-5-job).
+
+**Taiwan (Barber, Lee, Liu, Odean, "The cross-section of speculator skill", JFM 2014).** Traders de 1992 a 2006. Os 500 melhores no ano anterior ganharam em média 61,3 bps/dia antes de taxas e 37,9 bps/dia depois; os piores perderam -28,9 bps/dia depois de taxas. Menos de 1% da população de day traders ganha de forma previsível e confiável, líquido de taxas. Fonte: [https://econpapers.repec.org/RePEc:eee:finmar:v:18:y:2014:i:c:p:1-24](https://econpapers.repec.org/RePEc:eee:finmar:v:18:y:2014:i:c:p:1-24). O estudo anterior (2004, "Do Individual Day Traders Make Money?") é citado em fontes secundárias com mais de 80% perdendo após custos; não abri o texto original.
+
+**Mensagem para o produto:** a evidência não sustenta 10 a 20% ao dia nem qualquer promessa de lucro. O bot de day trade deve ser apresentado como ferramenta de teste (backtest e paper), com métricas de custo, drawdown e número de trades. Não encontrei retornos algorítmicos publicados e verificados em nível de "retorno líquido por dia" para varejo; não há número a citar.
+
+### 5. Screening e backtest honesto
+
+**Métodos para o recomendador (ações e cripto, 30 dias).** Não consegui abrir um estudo primário com números pós-custo para momentum de 30 dias em B3 ou cripto. Indícios de fontes secundárias: momentum cross-sectional de 12 meses com exclusão do último mês (12-1) é o padrão da literatura (Jegadeesh e Titman, 1993); o horizonte de 1 mês tende a reverter; momentum de série temporal tem evidência forte em futuros, mas a replicação em ações é contestada. Não verificado: retorno líquido desses sinais no mercado brasileiro. Sinais a considerar, sem promessa de retorno: retorno de 30 dias normalizado por volatilidade, força relativa contra índice (IBOV, S&P 500), volume relativo à mediana de 60 dias, z-score de desvio da média para reversão e filtro de liquidez (volume financeiro mínimo).
+
+**Backtest honesto (checklist com fonte).**
+
+- Look-ahead: sinais só com dados já fechados e teste de perturbação do futuro (ADR-0016 e `TestNoStrategyLooksAhead`, já no projeto). Ver também `docs/trading/freqtrade.md`.
+- Survivorship bias: o universo precisa incluir papéis deslistados ou documentar que não inclui (`docs/trading/backtesting.md`).
+- Overfitting e múltiplos testes: Probability of Backtest Overfitting (Bailey, Borwein, López de Prado, Zhu) [https://papers.ssrn.com/abstract=2326253](https://papers.ssrn.com/abstract=2326253); Deflated Sharpe Ratio (Bailey e López de Prado, 2014) [https://papers.ssrn.com/abstract=2460551](https://papers.ssrn.com/abstract=2460551). O projeto já tem DSR (fase 9.6).
+- Custos e slippage: o projeto já modela custo e slippage; falta documentar a calibração com dados reais.
+
+**Frameworks em Go (nenhum dominante verificado):**
+
+- `gobacktest`, event-driven, poucas estrelas, descrito como em desenvolvimento: [https://github.com/gobacktest/gobacktest](https://github.com/gobacktest/gobacktest).
+- `xoney`, sem dependências, event-driven, ordens a mercado e limite: [https://github.com/quick-trade/xoney](https://github.com/quick-trade/xoney).
+- `wisp`, backtest e trading em Go com TUI, multi-exchange: [https://github.com/wisp-trading/wisp](https://github.com/wisp-trading/wisp).
+- Não encontrei framework Go vetorizado maduro. Maturidade de todos os itens não verificada (não abri histórico de commits). Recomendação: manter o motor próprio do projeto, que já é determinístico e testado; usar os frameworks só como referência.
+
+### 6. Telegram Bot API (alertas)
+
+Fonte oficial: [https://core.telegram.org/bots/faq](https://core.telegram.org/bots/faq).
+
+- Em um chat: evitar mais de 1 mensagem por segundo. Rajadas curtas podem passar, mas depois vêm erros 429.
+- Em grupo: no máximo 20 mensagens por minuto.
+- Broadcast gratuito: cerca de 30 mensagens por segundo; acima disso, 429. Broadcast pago (Stars, ativado em @BotFather) sobe o teto a 1.000/s, com custo de 0,1 Star por mensagem acima de 30/s.
+- Boas práticas: fila com limite por chat, retry com backoff em 429 respeitando o `retry_after`, deduplicação (o projeto já dispara cada alerta uma vez) e agrupamento de notificações em uma mensagem.
+
+## Recomendações para o vukem-trading
+
+Priorizadas. Nenhuma foi implementada; cada uma depende de decisão do dono ou de briefing ao sênior.
+
+1. **Alinhar o escopo do recomendador (decisão do dono, antes de codar).** README e ROADMAP não descrevem bot de recomendação com ranking de 20 ações e 10 cripto nem dashboard de recomendação; o projeto é paper-only com estratégias de backtest. Ou vira nova fase (exige ADR e atualização do SDD) ou é escopo de outro projeto. Não avançar sem essa decisão.
+2. **Disclaimer obrigatório em todas as superfícies do recomendador** (dashboard, Telegram e documentação): natureza informativa, sem garantia, sem envio de ordens, responsabilidade do usuário. Parecer jurídico sobre credenciamento de analista (Resolução CVM 20) antes de divulgar ou cobrar.
+3. **Remover a meta de 10 a 20% ao dia da documentação e do produto.** Exibir um "fator composto implícito" para qualquer taxa diária, para tornar a expectativa visível.
+4. **Fontes de dados do recomendador:** começar com brapi (Startup ou Pro, conforme a frequência) para B3 e CoinGecko Demo para cripto; Alpaca Basic para EUA em paper. Registrar cada fonte em `docs/sources.md` com termos e limites antes de integrar (o teste `TestEveryProviderIsDocumentedWithItsTerms` já exige isso).
+5. **Score do recomendador com métricas explícitas e testadas:** retorno de 30 dias normalizado por volatilidade, força relativa contra índice, volume relativo e filtro de liquidez, cada sinal com teste de look-ahead. Não declarar valor preditivo sem backtest walk-forward com custos.
+6. **Validar o recomendador como backtest walk-forward** (o runner da fase 9.5 já existe): reportar retorno líquido, drawdown, turnover e intervalo de confiança, e comparar com buy-and-hold do índice.
+7. **Alertas Telegram com fila por chat**, limite de 1 msg/s por chat, 20/min em grupo, retry respeitando `retry_after` e agrupamento. Testar com 429 simulado.
+8. **Day trade continua só em paper e backtest.** Antes de qualquer conta real, medir a expectativa líquida no paper por período e registrar a decisão no ROADMAP (fases 6 e 17 já cobrem isso).
+9. **Pendências de fonte:** pedir a documentação da ProfitDLL à Nelogica e confirmar API de corretoras; abrir as páginas oficiais de preço da Massive e da Finnhub; ler a Resolução CVM 20 consolidada e a IN RFB 1.585 (base do IRRF); confirmar código de DARF de cripto e a isenção no day trade de cripto com a Receita ou contador.
+
+## Disclaimers
+
+- Esta pesquisa não é recomendação de investimento nem aconselhamento tributário ou jurídico.
+- Preços, limites e termos de fornecedores mudam. Os valores foram lidos nas páginas consultadas em 2026-11-14 e precisam ser revalidados antes de contratar ou integrar.
+- Números marcados como fonte secundária ou não verificado não devem ir para código, interface ou material para o usuário final sem confirmação na fonte oficial.
+- Day trade envolve perda de capital; os estudos citados mostram que a maioria dos participantes perde dinheiro.
