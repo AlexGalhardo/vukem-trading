@@ -1,11 +1,7 @@
 name: Uptime
 
-# Checks the public documentation site and the web readiness endpoint every 30 minutes. A failing run
-# notifies the repository owner through GitHub; when TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets exist,
-# it also sends a Telegram message. Dispatch it with an extra URL that does not answer to rehearse the alert.
+# Schedule removed: the Railway endpoint is unavailable, so the cron run failed every day. Re-add it when Railway is back.
 on:
-  schedule:
-    - cron: "11,41 * * * *"
   workflow_dispatch:
     inputs:
       url:
