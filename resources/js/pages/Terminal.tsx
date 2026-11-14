@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 import MarketChart from "@/components/MarketChart";
+import Recommendations from "@/components/Recommendations";
 import { TapeLadder } from "@/components/TapeLadder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,10 @@ const titles: Record<string, [string, string]> = {
   risk: ["Risk control", "Set limits before allowing new exposures."],
   audit: ["Audit", "A persistent trail of decisions and actions."],
   settings: ["Settings", "Status of integrations and the execution environment."],
+  recommendations: [
+    "Daily ranking",
+    "Top US stocks and crypto from end-of-day data. Informational only.",
+  ],
 };
 type NumericKey = "fast" | "slow" | "threshold" | "stop_bps" | "target_bps";
 const accountOf = (market: string) =>
@@ -1080,6 +1085,7 @@ export default function Terminal({ section }: { section: string }) {
           </Card>
         </div>
       )}
+      {section === "recommendations" && <Recommendations />}
       {section === "audit" && (
         <Card>
           <CardHeader>

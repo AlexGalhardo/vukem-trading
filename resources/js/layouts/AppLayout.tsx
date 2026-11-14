@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Sun,
   Terminal,
+  TrendingUp,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -40,6 +41,7 @@ const navigation = [
   ["/market", "Market data", CandlestickChart],
   ["/strategies", "Strategies", Layers],
   ["/backtests", "Lab", FlaskConical],
+  ["/recommendations", "Daily ranking", TrendingUp],
   ["/orders", "Orders", ListOrdered],
   ["/positions", "Positions", Activity],
   ["/risk", "Risk control", ShieldCheck],
