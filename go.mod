@@ -3,7 +3,7 @@ module github.com/AlexGalhardo/vukem-trading
 go 1.27.4
 
 require (
-	github.com/AlexGalhardo/vukem v0.41.0
+	github.com/AlexGalhardo/vukem v0.43.0
 	github.com/AlexGalhardo/vukem/drivers/postgres v0.6.1
 	github.com/shopspring/decimal v1.4.0
 )
